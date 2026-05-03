@@ -652,8 +652,6 @@ func decodeFixedArray[T any](data unsafe.Pointer, count uint32, offset uintptr, 
 }
 
 func fixedString(b []byte) string {
-	if n := bytes.IndexByte(b, 0); n >= 0 {
-		return string(b[:n])
-	}
-	return string(b)
+	before, _, _ := bytes.Cut(b, []byte{0})
+	return string(before)
 }

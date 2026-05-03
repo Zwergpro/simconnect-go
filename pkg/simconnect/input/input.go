@@ -15,7 +15,7 @@ import (
 	"github.com/Zwergpro/simconnect-go/pkg/simconnect/core"
 )
 
-// Session is the subset of client.Client methods used by this package.
+// Session is the subset of client.Sim methods used by this package.
 type Session interface {
 	NextRequestID() uint32
 	AddWaiter(uint32) (<-chan core.RequestResult, error)
@@ -32,7 +32,7 @@ type Session interface {
 
 // Input exposes input event enumeration, get/set, and subscription functions.
 type Input struct {
-	c Session
+	session Session
 
 	mu               sync.Mutex
 	inputSubs        map[uint64][]chan core.InputEventSubscriptionMessage
@@ -41,81 +41,81 @@ type Input struct {
 }
 
 // New creates an Input client and registers specialized message handlers.
-func New(c Session) *Input {
-	s := &Input{
-		c:            c,
+func New(s Session) *Input {
+	i := &Input{
+		session:      s,
 		inputSubs:    make(map[uint64][]chan core.InputEventSubscriptionMessage),
 		paramWaiters: make(map[uint64]chan core.RequestResult),
 	}
-	c.RegisterHandler(core.RecvIDSubscribeInputEvent, func(msg core.Message) {
+	s.RegisterHandler(core.RecvIDSubscribeInputEvent, func(msg core.Message) {
 		m, ok := msg.(core.InputEventSubscriptionMessage)
 		if !ok {
 			return
 		}
-		s.mu.Lock()
-		subs := append([]chan core.InputEventSubscriptionMessage(nil), s.inputSubs[m.Hash]...)
+		i.mu.Lock()
+		subs := append([]chan core.InputEventSubscriptionMessage(nil), i.inputSubs[m.Hash]...)
 		if m.Hash != 0 {
-			subs = append(subs, s.inputSubs[0]...)
+			subs = append(subs, i.inputSubs[0]...)
 		}
-		s.mu.Unlock()
+		i.mu.Unlock()
 		for _, ch := range subs {
-			s.sendInputEventSub(ch, m)
+			i.sendInputEventSub(ch, m)
 		}
 	})
-	c.RegisterHandler(core.RecvIDEnumerateInputEventParams, func(msg core.Message) {
+	s.RegisterHandler(core.RecvIDEnumerateInputEventParams, func(msg core.Message) {
 		m, ok := msg.(core.InputEventParamsMessage)
 		if !ok {
 			return
 		}
-		s.mu.Lock()
-		if w, ok := s.paramWaiters[m.Hash]; ok {
-			delete(s.paramWaiters, m.Hash)
+		i.mu.Lock()
+		if w, ok := i.paramWaiters[m.Hash]; ok {
+			delete(i.paramWaiters, m.Hash)
 			w <- core.RequestResult{Msg: m}
 			close(w)
 		}
-		s.mu.Unlock()
+		i.mu.Unlock()
 	})
-	c.RegisterHandler(core.RecvIDControllersList, func(msg core.Message) {
+	s.RegisterHandler(core.RecvIDControllersList, func(msg core.Message) {
 		m, ok := msg.(core.ControllersListMessage)
 		if !ok {
 			return
 		}
-		s.mu.Lock()
-		if w := s.controllerWaiter; w != nil {
-			s.controllerWaiter = nil
+		i.mu.Lock()
+		if w := i.controllerWaiter; w != nil {
+			i.controllerWaiter = nil
 			w <- core.RequestResult{Msg: m}
 			close(w)
 		}
-		s.mu.Unlock()
+		i.mu.Unlock()
 	})
-	c.RegisterCloseHook(func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		for hash, subs := range s.inputSubs {
+	s.RegisterCloseHook(func() {
+		i.mu.Lock()
+		defer i.mu.Unlock()
+		for hash, subs := range i.inputSubs {
 			for _, ch := range subs {
 				safeClose(ch)
 			}
-			delete(s.inputSubs, hash)
+			delete(i.inputSubs, hash)
 		}
-		for hash, w := range s.paramWaiters {
+		for hash, w := range i.paramWaiters {
 			w <- core.RequestResult{Err: core.ErrClosed}
 			close(w)
-			delete(s.paramWaiters, hash)
+			delete(i.paramWaiters, hash)
 		}
-		if s.controllerWaiter != nil {
-			s.controllerWaiter <- core.RequestResult{Err: core.ErrClosed}
-			close(s.controllerWaiter)
-			s.controllerWaiter = nil
+		if i.controllerWaiter != nil {
+			i.controllerWaiter <- core.RequestResult{Err: core.ErrClosed}
+			close(i.controllerWaiter)
+			i.controllerWaiter = nil
 		}
 	})
-	return s
+	return i
 }
 
-func (s *Input) EnumerateInputEvents(ctx context.Context) (core.InputEventListMessage, error) {
+func (i *Input) EnumerateInputEvents(ctx context.Context) (core.InputEventListMessage, error) {
 	var zero core.InputEventListMessage
 
-	requestID := s.c.NextRequestID()
-	waiter, err := s.c.AddWaiter(requestID)
+	requestID := i.session.NextRequestID()
+	waiter, err := i.session.AddWaiter(requestID)
 	if err != nil {
 		return zero, err
 	}
@@ -128,21 +128,21 @@ func (s *Input) EnumerateInputEvents(ctx context.Context) (core.InputEventListMe
 		}
 		select {
 		case packets <- inputMsg:
-		case <-s.c.Context().Done():
+		case <-i.session.Context().Done():
 		}
 	}
 
-	if err := s.c.AddDataSub(requestID, handler); err != nil {
-		s.c.RemoveWaiter(requestID)
+	if err := i.session.AddDataSub(requestID, handler); err != nil {
+		i.session.RemoveWaiter(requestID)
 		return zero, err
 	}
-	defer s.c.RemoveDataSub(requestID)
+	defer i.session.RemoveDataSub(requestID)
 
-	if err := s.c.Bindings().EnumerateInputEvents(bindings.SIMCONNECT_DATA_REQUEST_ID(requestID)); err != nil {
-		s.c.RemoveWaiter(requestID)
+	if err := i.session.Bindings().EnumerateInputEvents(bindings.SIMCONNECT_DATA_REQUEST_ID(requestID)); err != nil {
+		i.session.RemoveWaiter(requestID)
 		return zero, err
 	}
-	s.c.TrackSend(requestID)
+	i.session.TrackSend(requestID)
 
 	for {
 		select {
@@ -161,30 +161,30 @@ func (s *Input) EnumerateInputEvents(ctx context.Context) (core.InputEventListMe
 				return zero, nil
 			}
 		case <-ctx.Done():
-			s.c.RemoveWaiter(requestID)
+			i.session.RemoveWaiter(requestID)
 			return zero, ctx.Err()
 		}
 	}
 }
 
-func (s *Input) GetInputEvent(ctx context.Context, hash uint64) (core.InputEventValueMessage, error) {
+func (i *Input) GetInputEvent(ctx context.Context, hash uint64) (core.InputEventValueMessage, error) {
 	var zero core.InputEventValueMessage
-	requestID := s.c.NextRequestID()
-	waiter, err := s.c.AddWaiter(requestID)
+	requestID := i.session.NextRequestID()
+	waiter, err := i.session.AddWaiter(requestID)
 	if err != nil {
 		return zero, err
 	}
-	if err := s.c.Bindings().GetInputEvent(bindings.SIMCONNECT_DATA_REQUEST_ID(requestID), hash); err != nil {
-		s.c.RemoveWaiter(requestID)
+	if err := i.session.Bindings().GetInputEvent(bindings.SIMCONNECT_DATA_REQUEST_ID(requestID), hash); err != nil {
+		i.session.RemoveWaiter(requestID)
 		return zero, err
 	}
-	s.c.TrackSend(requestID)
+	i.session.TrackSend(requestID)
 
 	var result core.RequestResult
 	select {
 	case result = <-waiter:
 	case <-ctx.Done():
-		s.c.RemoveWaiter(requestID)
+		i.session.RemoveWaiter(requestID)
 		return zero, ctx.Err()
 	}
 	if result.Err != nil {
@@ -197,32 +197,32 @@ func (s *Input) GetInputEvent(ctx context.Context, hash uint64) (core.InputEvent
 	return msg, nil
 }
 
-func (s *Input) SetInputEventDouble(hash uint64, value float64) error {
+func (i *Input) SetInputEventDouble(hash uint64, value float64) error {
 	var buf [8]byte
 	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(value))
-	return s.c.Bindings().SetInputEvent(hash, uint32(len(buf)), unsafe.Pointer(&buf[0]))
+	return i.session.Bindings().SetInputEvent(hash, uint32(len(buf)), unsafe.Pointer(&buf[0]))
 }
 
-func (s *Input) SetInputEventString(hash uint64, value string) error {
+func (i *Input) SetInputEventString(hash uint64, value string) error {
 	buf := append([]byte(value), 0)
-	return s.c.Bindings().SetInputEvent(hash, uint32(len(buf)), unsafe.Pointer(&buf[0]))
+	return i.session.Bindings().SetInputEvent(hash, uint32(len(buf)), unsafe.Pointer(&buf[0]))
 }
 
-func (s *Input) EnumerateInputEventParams(ctx context.Context, hash uint64) (core.InputEventParamsMessage, error) {
+func (i *Input) EnumerateInputEventParams(ctx context.Context, hash uint64) (core.InputEventParamsMessage, error) {
 	var zero core.InputEventParamsMessage
-	waiter, err := s.addParamWaiter(hash)
+	waiter, err := i.addParamWaiter(hash)
 	if err != nil {
 		return zero, err
 	}
-	if err := s.c.Bindings().EnumerateInputEventParams(hash); err != nil {
-		s.removeParamWaiter(hash)
+	if err := i.session.Bindings().EnumerateInputEventParams(hash); err != nil {
+		i.removeParamWaiter(hash)
 		return zero, err
 	}
 	var result core.RequestResult
 	select {
 	case result = <-waiter:
 	case <-ctx.Done():
-		s.removeParamWaiter(hash)
+		i.removeParamWaiter(hash)
 		return zero, ctx.Err()
 	}
 	if result.Err != nil {
@@ -235,43 +235,43 @@ func (s *Input) EnumerateInputEventParams(ctx context.Context, hash uint64) (cor
 	return msg, nil
 }
 
-func (s *Input) SubscribeInputEvent(ctx context.Context, hash uint64) (<-chan core.InputEventSubscriptionMessage, error) {
-	ch := make(chan core.InputEventSubscriptionMessage, s.c.ChannelBuffer())
-	s.mu.Lock()
-	s.inputSubs[hash] = append(s.inputSubs[hash], ch)
-	s.mu.Unlock()
+func (i *Input) SubscribeInputEvent(ctx context.Context, hash uint64) (<-chan core.InputEventSubscriptionMessage, error) {
+	ch := make(chan core.InputEventSubscriptionMessage, i.session.ChannelBuffer())
+	i.mu.Lock()
+	i.inputSubs[hash] = append(i.inputSubs[hash], ch)
+	i.mu.Unlock()
 
-	if err := s.c.Bindings().SubscribeInputEvent(hash); err != nil {
-		s.removeInputEventSub(hash, ch)
+	if err := i.session.Bindings().SubscribeInputEvent(hash); err != nil {
+		i.removeInputEventSub(hash, ch)
 		return nil, err
 	}
 
 	go func() {
 		<-ctx.Done()
-		s.removeInputEventSub(hash, ch)
+		i.removeInputEventSub(hash, ch)
 	}()
 	return ch, nil
 }
 
-func (s *Input) UnsubscribeInputEvent(hash uint64) error {
-	return s.c.Bindings().UnsubscribeInputEvent(hash)
+func (i *Input) UnsubscribeInputEvent(hash uint64) error {
+	return i.session.Bindings().UnsubscribeInputEvent(hash)
 }
 
-func (s *Input) EnumerateControllers(ctx context.Context) (core.ControllersListMessage, error) {
+func (i *Input) EnumerateControllers(ctx context.Context) (core.ControllersListMessage, error) {
 	var zero core.ControllersListMessage
-	waiter, err := s.addControllerWaiter()
+	waiter, err := i.addControllerWaiter()
 	if err != nil {
 		return zero, err
 	}
-	if err := s.c.Bindings().EnumerateControllers(); err != nil {
-		s.removeControllerWaiter()
+	if err := i.session.Bindings().EnumerateControllers(); err != nil {
+		i.removeControllerWaiter()
 		return zero, err
 	}
 	var result core.RequestResult
 	select {
 	case result = <-waiter:
 	case <-ctx.Done():
-		s.removeControllerWaiter()
+		i.removeControllerWaiter()
 		return zero, ctx.Err()
 	}
 	if result.Err != nil {
@@ -284,41 +284,41 @@ func (s *Input) EnumerateControllers(ctx context.Context) (core.ControllersListM
 	return msg, nil
 }
 
-func (s *Input) addParamWaiter(hash uint64) (<-chan core.RequestResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (i *Input) addParamWaiter(hash uint64) (<-chan core.RequestResult, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	ch := make(chan core.RequestResult, 1)
-	s.paramWaiters[hash] = ch
+	i.paramWaiters[hash] = ch
 	return ch, nil
 }
 
-func (s *Input) removeParamWaiter(hash uint64) {
-	s.mu.Lock()
-	if w, ok := s.paramWaiters[hash]; ok {
-		delete(s.paramWaiters, hash)
+func (i *Input) removeParamWaiter(hash uint64) {
+	i.mu.Lock()
+	if w, ok := i.paramWaiters[hash]; ok {
+		delete(i.paramWaiters, hash)
 		close(w)
 	}
-	s.mu.Unlock()
+	i.mu.Unlock()
 }
 
-func (s *Input) addControllerWaiter() (<-chan core.RequestResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.controllerWaiter != nil {
+func (i *Input) addControllerWaiter() (<-chan core.RequestResult, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.controllerWaiter != nil {
 		return nil, fmt.Errorf("%w: controller enumeration already pending", core.ErrDecode)
 	}
 	ch := make(chan core.RequestResult, 1)
-	s.controllerWaiter = ch
+	i.controllerWaiter = ch
 	return ch, nil
 }
 
-func (s *Input) removeControllerWaiter() {
-	s.mu.Lock()
-	if s.controllerWaiter != nil {
-		close(s.controllerWaiter)
-		s.controllerWaiter = nil
+func (i *Input) removeControllerWaiter() {
+	i.mu.Lock()
+	if i.controllerWaiter != nil {
+		close(i.controllerWaiter)
+		i.controllerWaiter = nil
 	}
-	s.mu.Unlock()
+	i.mu.Unlock()
 }
 
 func (s *Input) removeInputEventSub(hash uint64, ch chan core.InputEventSubscriptionMessage) {
@@ -334,15 +334,15 @@ func (s *Input) removeInputEventSub(hash uint64, ch chan core.InputEventSubscrip
 	}
 	if len(s.inputSubs[hash]) == 0 {
 		delete(s.inputSubs, hash)
-		_ = s.c.Bindings().UnsubscribeInputEvent(hash)
+		_ = s.session.Bindings().UnsubscribeInputEvent(hash)
 	}
 }
 
-func (s *Input) sendInputEventSub(ch chan core.InputEventSubscriptionMessage, msg core.InputEventSubscriptionMessage) {
+func (i *Input) sendInputEventSub(ch chan core.InputEventSubscriptionMessage, msg core.InputEventSubscriptionMessage) {
 	defer func() { _ = recover() }()
 	select {
 	case ch <- msg:
-	case <-s.c.Context().Done():
+	case <-i.session.Context().Done():
 	}
 }
 

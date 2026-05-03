@@ -41,101 +41,101 @@ type facets struct {
 }
 
 // AI returns the AI-object sub-API, creating it on first call.
-func (c *Sim) AI() *ai.AI {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.ai == nil {
-		c.facetCache.ai = ai.New(c)
+func (s *Sim) AI() *ai.AI {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.ai == nil {
+		s.facetCache.ai = ai.New(s)
 	}
-	return c.facetCache.ai
+	return s.facetCache.ai
 }
 
 // Camera returns the camera sub-API, creating it on first call.
-func (c *Sim) Camera() *camera.Camera {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.camera == nil {
-		c.facetCache.camera = camera.New(c)
+func (s *Sim) Camera() *camera.Camera {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.camera == nil {
+		s.facetCache.camera = camera.New(s)
 	}
-	return c.facetCache.camera
+	return s.facetCache.camera
 }
 
 // Events returns the events/client-data sub-API, creating it on first call.
-func (c *Sim) Events() *events.Events {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.events == nil {
-		c.facetCache.events = events.New(c)
+func (s *Sim) Events() *events.Events {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.events == nil {
+		s.facetCache.events = events.New(s)
 	}
-	return c.facetCache.events
+	return s.facetCache.events
 }
 
 // Comm returns the CommBus sub-API, creating it on first call.
-func (c *Sim) Comm() *comm.Comm {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.comm == nil {
-		c.facetCache.comm = comm.New(c)
+func (s *Sim) Comm() *comm.Comm {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.comm == nil {
+		s.facetCache.comm = comm.New(s)
 	}
-	return c.facetCache.comm
+	return s.facetCache.comm
 }
 
 // System returns the system-state/event/action sub-API, creating it on first call.
-func (c *Sim) System() *system.System {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.sys == nil {
-		c.facetCache.sys = system.New(c)
+func (s *Sim) System() *system.System {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.sys == nil {
+		s.facetCache.sys = system.New(s)
 	}
-	return c.facetCache.sys
+	return s.facetCache.sys
 }
 
 // Flight returns the flight-file/plan sub-API, creating it on first call.
-func (c *Sim) Flight() *flight.Flight {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.flight == nil {
-		c.facetCache.flight = flight.New(c)
+func (s *Sim) Flight() *flight.Flight {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.flight == nil {
+		s.facetCache.flight = flight.New(s)
 	}
-	return c.facetCache.flight
+	return s.facetCache.flight
 }
 
 // Facilities returns the facilities sub-API, creating it on first call.
-func (c *Sim) Facilities() *facilities.Facilities {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.facilities == nil {
-		c.facetCache.facilities = facilities.New(c)
+func (s *Sim) Facilities() *facilities.Facilities {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.facilities == nil {
+		s.facetCache.facilities = facilities.New(s)
 	}
-	return c.facetCache.facilities
+	return s.facetCache.facilities
 }
 
 // Input returns the input-event sub-API, creating it on first call.
-func (c *Sim) Input() *input.Input {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.input == nil {
-		c.facetCache.input = input.New(c)
+func (s *Sim) Input() *input.Input {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.input == nil {
+		s.facetCache.input = input.New(s)
 	}
-	return c.facetCache.input
+	return s.facetCache.input
 }
 
 // Debug returns the diagnostic sub-API, creating it on first call.
-func (c *Sim) Debug() *dbgpkg.Debug {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.debug == nil {
-		c.facetCache.debug = dbgpkg.New(c)
+func (s *Sim) Debug() *dbgpkg.Debug {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.debug == nil {
+		s.facetCache.debug = dbgpkg.New(s)
 	}
-	return c.facetCache.debug
+	return s.facetCache.debug
 }
 
 // Simvar returns the typed sim-variable sub-API, creating it on first call.
-func (c *Sim) Simvar() *simvar.SimVar {
-	c.facetMu.Lock()
-	defer c.facetMu.Unlock()
-	if c.facetCache.simvar == nil {
-		c.facetCache.simvar = simvar.New(c)
+func (s *Sim) Simvar() *simvar.SimVar {
+	s.facetMu.Lock()
+	defer s.facetMu.Unlock()
+	if s.facetCache.simvar == nil {
+		s.facetCache.simvar = simvar.New(s)
 	}
-	return c.facetCache.simvar
+	return s.facetCache.simvar
 }

@@ -8,8 +8,8 @@ import (
 	"flag"
 	"fmt"
 	simconnect "github.com/Zwergpro/simconnect-go/pkg/simconnect/client"
-	"github.com/Zwergpro/simconnect-go/pkg/simconnect/core"
 	"github.com/Zwergpro/simconnect-go/pkg/simconnect/comm"
+	"github.com/Zwergpro/simconnect-go/pkg/simconnect/core"
 	"log"
 	"os"
 	"os/signal"
@@ -82,7 +82,7 @@ func checkCommBusRoundTrip(ctx context.Context, bus *comm.Comm, eventName string
 	fmt.Println("  publisher connection opened")
 
 	subCtx, cancel := context.WithCancel(ctx)
-	ch, err := bus.SubscribeCommBusEvent(subCtx, eventName)
+	ch, err := bus.Subscribe(subCtx, eventName)
 	if err != nil {
 		cancel()
 		fmt.Printf("  SimConnect_SubscribeToCommBusEvent(%q): %s\n", eventName, formatError(err))
@@ -91,7 +91,7 @@ func checkCommBusRoundTrip(ctx context.Context, bus *comm.Comm, eventName string
 	fmt.Printf("  SimConnect_SubscribeToCommBusEvent: event=%q ok\n", eventName)
 
 	stringPayload := fmt.Sprintf(`{"source":"cmd/communication","kind":"string","time":%q}`, time.Now().Format(time.RFC3339))
-	if err := publisherComm.CallCommBusEvent(eventName, core.CommBusBroadcastToSimConnect, stringPayload); err != nil {
+	if err := publisherComm.Call(eventName, core.CommBusBroadcastToSimConnect, stringPayload); err != nil {
 		fmt.Printf("  SimConnect_CallCommBusEvent string: %s\n", formatError(err))
 	} else {
 		fmt.Printf("  SimConnect_CallCommBusEvent string: broadcast=SIMCONNECT bytes=%d ok\n", len(stringPayload)+1)
@@ -99,7 +99,7 @@ func checkCommBusRoundTrip(ctx context.Context, bus *comm.Comm, eventName string
 	}
 
 	bytePayload := []byte{0x7B, 0x22, 0x6B, 0x69, 0x6E, 0x64, 0x22, 0x3A, 0x22, 0x62, 0x79, 0x74, 0x65, 0x73, 0x22, 0x7D, 0x00}
-	if err := publisherComm.CallCommBusEventBytes(eventName, core.CommBusBroadcastToSimConnect, bytePayload); err != nil {
+	if err := publisherComm.CallBytes(eventName, core.CommBusBroadcastToSimConnect, bytePayload); err != nil {
 		fmt.Printf("  SimConnect_CallCommBusEvent bytes: %s\n", formatError(err))
 	} else {
 		fmt.Printf("  SimConnect_CallCommBusEvent bytes: broadcast=SIMCONNECT bytes=%d ok\n", len(bytePayload))
@@ -175,7 +175,7 @@ func checkBroadcastTargets(bus *comm.Comm, eventName string) {
 
 	for _, target := range targets {
 		payload := fmt.Sprintf(`{"target":%q}`, target.name)
-		err := bus.CallCommBusEvent(eventName, target.target, payload)
+		err := bus.Call(eventName, target.target, payload)
 		if err != nil {
 			fmt.Printf("  %-15s error: %s\n", target.name, formatError(err))
 			continue

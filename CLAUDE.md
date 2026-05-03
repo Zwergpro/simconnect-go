@@ -38,7 +38,7 @@ The codebase is two layers stacked on the SDK:
 
 ### Layer 2 — `pkg/simconnect/`
 
-`pkg/simconnect/client.Client` (aliased as `Sim`) is the spine. `client.Open(ctx, appName, opts...)` connects and (unless `WithManualDispatch()`) starts a goroutine that ticks `cfg.pollInterval`, calls `GetNextDispatch`, decodes packets, and routes them through three maps:
+`pkg/simconnect/client.Sim` is the spine. `client.Open(ctx, appName, opts...)` connects and (unless `WithManualDispatch()`) starts a goroutine that ticks `cfg.pollInterval`, calls `GetNextDispatch`, decodes packets, and routes them through three maps:
 
 - `waiters[reqID]` — one-shot requests (e.g. `simvar.GetOnce`, `system.RequestState`).
 - `dataSubs[reqID]` — recurring subscriptions (e.g. `SIMCONNECT_PERIOD_SIM_FRAME`).

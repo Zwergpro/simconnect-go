@@ -129,10 +129,10 @@ Layer 2 wraps `pkg/bindings` in an idiomatic Go API: a context-cancellable sessi
 
 ### `pkg/simconnect/client` — the spine
 
-Defined in [pkg/simconnect/client/client.go](../pkg/simconnect/client/client.go). The primary type is `Client`; `Sim` is a type alias kept for ergonomic public-API code (`*simconnect.Sim`):
+Defined in [pkg/simconnect/client/client.go](../pkg/simconnect/client/client.go). The primary type is `Sim`:
 
 ```go
-type Client struct {
+type Sim struct {
     raw *bindings.SimConnect
     cfg clientConfig
 
@@ -161,12 +161,10 @@ type Client struct {
     facetCache facets
 }
 
-type Sim = Client
-
 func Open(ctx context.Context, appName string, opts ...Option) (*Sim, error)
-func (c *Client) Close() error
-func (c *Client) Errors() <-chan error
-func (c *Client) Poll() error
+func (c *Sim) Close() error
+func (c *Sim) Errors() <-chan error
+func (c *Sim) Poll() error
 ```
 
 `Open` calls `bindings.Open`, builds the dispatch state, and (unless `WithManualDispatch()` is passed) starts a background goroutine that ticks at `cfg.pollInterval` and drains every queued packet via `Poll → GetNextDispatch → decodeMessage → dispatch`. `Close` is idempotent (`sync.Once`): it cancels the context, waits for the dispatch goroutine, fans `ErrClosed` to all outstanding waiters, runs registered close hooks, calls the underlying `SimConnect_Close`, and closes the error channel.
@@ -175,25 +173,25 @@ func (c *Client) Poll() error
 
 `core` is the single home for the protocol types (`ObjectID`, `Period`, `RecvID`, `Exception`, …), the `Message` interface and every concrete `*Message` decoded packet type, the typed errors (`HResultError`, `ErrClosed`, `ExceptionError`, `RequestResult`), and the small `bindings_conv.go` adapters. It exists so that facet packages (`ai`, `camera`, `events`, …) can share types with `client` without forming an import cycle: `client` imports the facets (for the `sim.AI()`-style accessors); the facets only import `core`.
 
-These names are **not** re-exported from `client`. Code that needs a protocol value imports `core` directly: `core.UserAircraft`, `core.PeriodSecond`, `core.ExceptionError`, `core.OpenMessage`, etc. `client` exports only what it owns — the session itself (`Client`, `Sim`), constructors (`Open`, `Dial`), options (`WithPollInterval`, `WithManualDispatch`), and the dispatch primitives (`AddWaiter`, `RegisterHandler`, …).
+These names are **not** re-exported from `client`. Code that needs a protocol value imports `core` directly: `core.UserAircraft`, `core.PeriodSecond`, `core.ExceptionError`, `core.OpenMessage`, etc. `client` exports only what it owns — the session itself (`Sim`), constructors (`Open`, `Dial`), options (`WithPollInterval`, `WithManualDispatch`), and the dispatch primitives (`AddWaiter`, `RegisterHandler`, …).
 
 ### Domain subpackages (`pkg/simconnect/<area>`)
 
 Each subpackage wraps a `*client.Sim` and exposes a typed surface for one SDK family. There are two layers here:
 
 - **Facet packages** named after the SDK area users actually think about. These are what callers normally import.
-- **Implementation packages** grouped by `apidocs/` family — `communication`, `eventsdata`, `flights`, `general`. The facet packages are thin re-exports over these, so the heavy lifting lives in one place per apidocs group instead of being duplicated. Calling code can ignore the implementation packages unless it needs an API the facet hasn't lifted yet.
+- **Implementation packages** grouped by `apidocs/` family — `eventsdata`, `general`. The facet packages are thin re-exports over these, so the heavy lifting lives in one place per apidocs group instead of being duplicated. Calling code can ignore the implementation packages unless it needs an API the facet hasn't lifted yet.
 
 | Facet | Wraps | Surface |
 |---|---|---|
 | [`ai`](../pkg/simconnect/ai/) | (self) | Spawn ATC / non-ATC / parked / simulated objects; release control; remove; upload flight plans. |
 | [`camera`](../pkg/simconnect/camera/) | (self) | Acquire / release; set & get camera; enumerate definitions; status and world-locker subscriptions via channels. |
-| [`comm`](../pkg/simconnect/comm/) | [`communication`](../pkg/simconnect/communication/) | CommBus subscribe / call (inter-client and panel-to-app messaging). |
+| [`comm`](../pkg/simconnect/comm/) | (self) | CommBus subscribe / call (inter-client and panel-to-app messaging). |
 | [`debug`](../pkg/simconnect/debug/) | (self) | `LastSentPacketID`, `RequestResponseTimes` for diagnosing request/response timing. |
 | [`events`](../pkg/simconnect/events/) | [`eventsdata`](../pkg/simconnect/eventsdata/) | Client events, notification groups, client-data areas, flow events. |
 | [`simvar`](../pkg/simconnect/simvar/) | [`eventsdata`](../pkg/simconnect/eventsdata/) | Typed SimVar definitions, one-shot reads, writes, and subscriptions. |
 | [`facilities`](../pkg/simconnect/facilities/) | (self) | Airport / waypoint / NDB / VOR list and detail queries with paginated aggregation. |
-| [`flight`](../pkg/simconnect/flight/) | [`flights`](../pkg/simconnect/flights/) | Flight file save / load; flight-plan load. |
+| [`flight`](../pkg/simconnect/flight/) | (self) | Flight file save / load; flight-plan load. |
 | [`input`](../pkg/simconnect/input/) | (self) | Input event enumeration, get / set / subscribe (hash-keyed dispatch). |
 | [`system`](../pkg/simconnect/system/) | [`general`](../pkg/simconnect/general/) | System state queries, `ExecuteAction` with packed parameters, system-event subscription, notification-group management. |
 
@@ -225,7 +223,7 @@ Tracing `simvar.GetOnce(ctx, sim, def, core.UserAircraft)` end-to-end:
 └────────┬─────────┘
          ▼
 ┌──────────────────┐  ticks every cfg.pollInterval
-│ Client.run()     │  → Poll() → raw.GetNextDispatch() → SIMCONNECT_RECV_SIMOBJECT_DATA
+│ Sim.run()        │  → Poll() → raw.GetNextDispatch() → SIMCONNECT_RECV_SIMOBJECT_DATA
 │  goroutine       │  → decodeMessage(raw, size) → dispatch(msg)
 └────────┬─────────┘
          ▼
@@ -390,6 +388,6 @@ There are no Go tests against the simulator; `pkg/bindings/layout_test.go` cover
 - **Don't regenerate `simconnect.yml`.** It's a leftover from an unsuccessful c-for-go attempt — the C++ header trips libclang. Extend the hand-written bindings.
 - **`SimConnect_Actions.md` is upstream-WIP.** Treat the action catalogue as best-effort; some actions are documented before they ship, others ship before they're documented.
 - **Cross-compile or get nothing.** `go build ./...` on Linux/macOS produces no artifact and no error because of the Windows build tag. Always pass `GOOS=windows GOARCH=amd64`.
-- **Dispatch handlers must not block.** `Client.dispatch` runs every registered handler and waiter callback inline on the polling goroutine. Long work belongs on a worker goroutine fed by a buffered channel.
-- **Protocol values live in `core`, not `client`.** `core.UserAircraft`, `core.PeriodSecond`, `core.DataSetDefault`, `core.ExceptionError`, `core.OpenMessage`, every `RecvID*`/`Period*`/`*Flag`/`Exception*` constant, and the `Message` interface itself are imported from `pkg/simconnect/core`. `client` exports only the session (`Client`/`Sim`, `Open`, `Dial`, options, dispatch primitives). If you see `client.X` for a protocol value in old code, it's a leftover from before re-exports were removed — switch the import to `core`.
-- **Don't import the implementation packages directly.** `pkg/simconnect/communication`, `eventsdata`, `flights`, and `general` are visible in the source tree but are wrapped by `comm`, `events`/`simvar`, `flight`, and `system` respectively. Reach for the facet name first; only drop down when the facet hasn't lifted what you need.
+- **Dispatch handlers must not block.** `Sim.dispatch` runs every registered handler and waiter callback inline on the polling goroutine. Long work belongs on a worker goroutine fed by a buffered channel.
+- **Protocol values live in `core`, not `client`.** `core.UserAircraft`, `core.PeriodSecond`, `core.DataSetDefault`, `core.ExceptionError`, `core.OpenMessage`, every `RecvID*`/`Period*`/`*Flag`/`Exception*` constant, and the `Message` interface itself are imported from `pkg/simconnect/core`. `client` exports only the session (`Sim`, `Open`, `Dial`, options, dispatch primitives). If you see `client.X` for a protocol value in old code, it's a leftover from before re-exports were removed — switch the import to `core`.
+- **Don't import the implementation packages directly.** `pkg/simconnect/eventsdata` and `general` are visible in the source tree but are wrapped by `events`/`simvar` and `system` respectively. Reach for the facet name first; only drop down when the facet hasn't lifted what you need.

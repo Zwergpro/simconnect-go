@@ -93,24 +93,24 @@ type SystemStateMessage struct {
 	String    string
 }
 
-func (SystemStateMessage) RecvID() RecvID                { return RecvIDSystemState }
-func (m SystemStateMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (SystemStateMessage) RecvID() RecvID              { return RecvIDSystemState }
+func (m SystemStateMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type AssignedObjectIDMessage struct {
 	RequestID uint32
 	ObjectID  ObjectID
 }
 
-func (AssignedObjectIDMessage) RecvID() RecvID                 { return RecvIDAssignedObjectID }
-func (m AssignedObjectIDMessage) DispatchRequestID() uint32    { return m.RequestID }
+func (AssignedObjectIDMessage) RecvID() RecvID              { return RecvIDAssignedObjectID }
+func (m AssignedObjectIDMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type ActionCallbackMessage struct {
 	RequestID uint32
 	ActionID  string
 }
 
-func (ActionCallbackMessage) RecvID() RecvID                { return RecvIDActionCallback }
-func (m ActionCallbackMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (ActionCallbackMessage) RecvID() RecvID              { return RecvIDActionCallback }
+func (m ActionCallbackMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 // ─── SimObject data messages ──────────────────────────────────────────────────
 
@@ -125,22 +125,22 @@ type SimObjectDataMessage struct {
 	Payload     []byte
 }
 
-func (SimObjectDataMessage) RecvID() RecvID                { return RecvIDSimObjectData }
-func (m SimObjectDataMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (SimObjectDataMessage) RecvID() RecvID              { return RecvIDSimObjectData }
+func (m SimObjectDataMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type SimObjectDataByTypeMessage struct {
 	SimObjectDataMessage
 }
 
-func (SimObjectDataByTypeMessage) RecvID() RecvID                { return RecvIDSimObjectDataByType }
-func (m SimObjectDataByTypeMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (SimObjectDataByTypeMessage) RecvID() RecvID              { return RecvIDSimObjectDataByType }
+func (m SimObjectDataByTypeMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type ClientDataMessage struct {
 	SimObjectDataMessage
 }
 
-func (ClientDataMessage) RecvID() RecvID                { return RecvIDClientData }
-func (m ClientDataMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (ClientDataMessage) RecvID() RecvID              { return RecvIDClientData }
+func (m ClientDataMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 // ─── Facility messages ────────────────────────────────────────────────────────
 
@@ -156,32 +156,32 @@ type AirportListMessage struct {
 	Airports []Airport
 }
 
-func (AirportListMessage) RecvID() RecvID                { return RecvIDAirportList }
-func (m AirportListMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (AirportListMessage) RecvID() RecvID              { return RecvIDAirportList }
+func (m AirportListMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type WaypointListMessage struct {
 	FacilityListMeta
 	Waypoints []Waypoint
 }
 
-func (WaypointListMessage) RecvID() RecvID                 { return RecvIDWaypointList }
-func (m WaypointListMessage) DispatchRequestID() uint32    { return m.RequestID }
+func (WaypointListMessage) RecvID() RecvID              { return RecvIDWaypointList }
+func (m WaypointListMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type NDBListMessage struct {
 	FacilityListMeta
 	NDBs []NDB
 }
 
-func (NDBListMessage) RecvID() RecvID                { return RecvIDNDBList }
-func (m NDBListMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (NDBListMessage) RecvID() RecvID              { return RecvIDNDBList }
+func (m NDBListMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type VORListMessage struct {
 	FacilityListMeta
 	VORs []VOR
 }
 
-func (VORListMessage) RecvID() RecvID                { return RecvIDVORList }
-func (m VORListMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (VORListMessage) RecvID() RecvID              { return RecvIDVORList }
+func (m VORListMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type FacilityDataMessage struct {
 	UserRequestID         uint32
@@ -194,31 +194,31 @@ type FacilityDataMessage struct {
 	Payload               []byte
 }
 
-func (FacilityDataMessage) RecvID() RecvID                { return RecvIDFacilityData }
-func (m FacilityDataMessage) DispatchRequestID() uint32   { return m.UserRequestID }
+func (FacilityDataMessage) RecvID() RecvID              { return RecvIDFacilityData }
+func (m FacilityDataMessage) DispatchRequestID() uint32 { return m.UserRequestID }
 
 type FacilityDataEndMessage struct {
 	RequestID uint32
 }
 
-func (FacilityDataEndMessage) RecvID() RecvID                { return RecvIDFacilityDataEnd }
-func (m FacilityDataEndMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (FacilityDataEndMessage) RecvID() RecvID              { return RecvIDFacilityDataEnd }
+func (m FacilityDataEndMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type FacilityMinimalListMessage struct {
 	FacilityListMeta
 	Facilities []FacilityMinimal
 }
 
-func (FacilityMinimalListMessage) RecvID() RecvID                 { return RecvIDFacilityMinimalList }
-func (m FacilityMinimalListMessage) DispatchRequestID() uint32    { return m.RequestID }
+func (FacilityMinimalListMessage) RecvID() RecvID              { return RecvIDFacilityMinimalList }
+func (m FacilityMinimalListMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type JetwayDataMessage struct {
 	FacilityListMeta
 	Jetways []JetwayData
 }
 
-func (JetwayDataMessage) RecvID() RecvID                { return RecvIDJetwayData }
-func (m JetwayDataMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (JetwayDataMessage) RecvID() RecvID              { return RecvIDJetwayData }
+func (m JetwayDataMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 // ─── Input event messages ────────────────────────────────────────────────────
 
@@ -233,8 +233,8 @@ type InputEventListMessage struct {
 	Events []InputEventDescriptor
 }
 
-func (InputEventListMessage) RecvID() RecvID                { return RecvIDEnumerateInputEvents }
-func (m InputEventListMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (InputEventListMessage) RecvID() RecvID              { return RecvIDEnumerateInputEvents }
+func (m InputEventListMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type InputEventValueMessage struct {
 	RequestID uint32
@@ -244,8 +244,8 @@ type InputEventValueMessage struct {
 	Payload   []byte
 }
 
-func (InputEventValueMessage) RecvID() RecvID                { return RecvIDGetInputEvent }
-func (m InputEventValueMessage) DispatchRequestID() uint32   { return m.RequestID }
+func (InputEventValueMessage) RecvID() RecvID              { return RecvIDGetInputEvent }
+func (m InputEventValueMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 type InputEventSubscriptionMessage struct {
 	Hash    uint64
@@ -292,8 +292,8 @@ type SimObjectLiveryListMessage struct {
 	Liveries []SimObjectLivery
 }
 
-func (SimObjectLiveryListMessage) RecvID() RecvID                 { return RecvIDEnumerateSimObjectAndLiveryList }
-func (m SimObjectLiveryListMessage) DispatchRequestID() uint32    { return m.RequestID }
+func (SimObjectLiveryListMessage) RecvID() RecvID              { return RecvIDEnumerateSimObjectAndLiveryList }
+func (m SimObjectLiveryListMessage) DispatchRequestID() uint32 { return m.RequestID }
 
 // ─── Misc messages ────────────────────────────────────────────────────────────
 

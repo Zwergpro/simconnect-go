@@ -146,7 +146,7 @@ type ClientDataDefinitionItem struct {
 
 // EventsData exposes events, data definitions/requests, client data areas, and flow events.
 type EventsData struct {
-	c Session
+	session Session
 
 	mu          sync.Mutex
 	definitions map[*definitionCore]uint32
@@ -156,7 +156,7 @@ type EventsData struct {
 // New creates an EventsData and registers flow-event handler.
 func New(c Session) *EventsData {
 	s := &EventsData{
-		c:           c,
+		session:     c,
 		definitions: make(map[*definitionCore]uint32),
 	}
 	c.RegisterHandler(core.RecvIDFlowEvent, func(msg core.Message) {
@@ -184,20 +184,20 @@ func New(c Session) *EventsData {
 
 // ─── Custom / notification-group events ──────────────────────────────────────
 
-func (s *EventsData) MapEvent(name string) (Event, error) {
-	eventID := core.EventID(s.c.NextEventID())
-	if err := s.c.Bindings().MapClientEventToSimEvent(bindings.SIMCONNECT_CLIENT_EVENT_ID(eventID), name); err != nil {
+func (e *EventsData) MapEvent(name string) (Event, error) {
+	eventID := core.EventID(e.session.NextEventID())
+	if err := e.session.Bindings().MapClientEventToSimEvent(bindings.SIMCONNECT_CLIENT_EVENT_ID(eventID), name); err != nil {
 		return Event{}, err
 	}
 	return Event{id: eventID}, nil
 }
 
-func (s *EventsData) Transmit(event Event, data uint32, opts ...TransmitOption) error {
+func (e *EventsData) Transmit(event Event, data uint32, opts ...TransmitOption) error {
 	cfg := defaultTransmitConfig()
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	return s.c.Bindings().TransmitClientEvent(
+	return e.session.Bindings().TransmitClientEvent(
 		bindings.SIMCONNECT_OBJECT_ID(cfg.objectID),
 		bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id),
 		data,
@@ -206,12 +206,12 @@ func (s *EventsData) Transmit(event Event, data uint32, opts ...TransmitOption) 
 	)
 }
 
-func (s *EventsData) TransmitEX1(event Event, data0, data1, data2, data3, data4 uint32, opts ...TransmitOption) error {
+func (e *EventsData) TransmitEX1(event Event, data0, data1, data2, data3, data4 uint32, opts ...TransmitOption) error {
 	cfg := defaultTransmitConfig()
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	return s.c.Bindings().TransmitClientEvent_EX1(
+	return e.session.Bindings().TransmitClientEvent_EX1(
 		bindings.SIMCONNECT_OBJECT_ID(cfg.objectID),
 		bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id),
 		bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(cfg.groupID),
@@ -220,68 +220,68 @@ func (s *EventsData) TransmitEX1(event Event, data0, data1, data2, data3, data4 
 	)
 }
 
-func (s *EventsData) AddClientEventToNotificationGroup(groupID core.NotificationGroupID, event Event, maskable bool) error {
-	return s.c.Bindings().AddClientEventToNotificationGroup(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID), bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id), maskable)
+func (e *EventsData) AddClientEventToNotificationGroup(groupID core.NotificationGroupID, event Event, maskable bool) error {
+	return e.session.Bindings().AddClientEventToNotificationGroup(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID), bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id), maskable)
 }
 
-func (s *EventsData) RemoveClientEvent(groupID core.NotificationGroupID, event Event) error {
-	return s.c.Bindings().RemoveClientEvent(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID), bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id))
+func (e *EventsData) RemoveClientEvent(groupID core.NotificationGroupID, event Event) error {
+	return e.session.Bindings().RemoveClientEvent(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID), bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id))
 }
 
-func (s *EventsData) ClearNotificationGroup(groupID core.NotificationGroupID) error {
-	return s.c.Bindings().ClearNotificationGroup(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID))
+func (e *EventsData) ClearNotificationGroup(groupID core.NotificationGroupID) error {
+	return e.session.Bindings().ClearNotificationGroup(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID))
 }
 
-func (s *EventsData) RequestNotificationGroup(groupID core.NotificationGroupID) error {
-	return s.c.Bindings().RequestNotificationGroup(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID), 0, 0)
+func (e *EventsData) RequestNotificationGroup(groupID core.NotificationGroupID) error {
+	return e.session.Bindings().RequestNotificationGroup(bindings.SIMCONNECT_NOTIFICATION_GROUP_ID(groupID), 0, 0)
 }
 
-func (s *EventsData) RequestReservedKey(event Event, keyChoice1, keyChoice2, keyChoice3 string) error {
-	return s.c.Bindings().RequestReservedKey(bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id), keyChoice1, keyChoice2, keyChoice3)
+func (e *EventsData) RequestReservedKey(event Event, keyChoice1, keyChoice2, keyChoice3 string) error {
+	return e.session.Bindings().RequestReservedKey(bindings.SIMCONNECT_CLIENT_EVENT_ID(event.id), keyChoice1, keyChoice2, keyChoice3)
 }
 
 // ─── Flow events ──────────────────────────────────────────────────────────────
 
-func (s *EventsData) SubscribeFlowEvents(ctx context.Context) (<-chan core.FlowEventMessage, error) {
-	if err := s.c.Bindings().SubscribeToFlowEvent(); err != nil {
+func (e *EventsData) SubscribeFlowEvents(ctx context.Context) (<-chan core.FlowEventMessage, error) {
+	if err := e.session.Bindings().SubscribeToFlowEvent(); err != nil {
 		return nil, err
 	}
-	ch := make(chan core.FlowEventMessage, s.c.ChannelBuffer())
-	s.mu.Lock()
-	s.flowSubs = append(s.flowSubs, ch)
-	s.mu.Unlock()
+	ch := make(chan core.FlowEventMessage, e.session.ChannelBuffer())
+	e.mu.Lock()
+	e.flowSubs = append(e.flowSubs, ch)
+	e.mu.Unlock()
 
 	go func() {
 		<-ctx.Done()
-		s.removeFlowSub(ch)
+		e.removeFlowSub(ch)
 	}()
 	return ch, nil
 }
 
-func (s *EventsData) UnsubscribeFlowEvents() error {
-	return s.c.Bindings().UnsubscribeToFlowEvent()
+func (e *EventsData) UnsubscribeFlowEvents() error {
+	return e.session.Bindings().UnsubscribeToFlowEvent()
 }
 
-func (s *EventsData) removeFlowSub(target chan core.FlowEventMessage) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, ch := range s.flowSubs {
+func (e *EventsData) removeFlowSub(target chan core.FlowEventMessage) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, ch := range e.flowSubs {
 		if ch == target {
 			close(ch)
-			s.flowSubs = append(s.flowSubs[:i], s.flowSubs[i+1:]...)
-			if len(s.flowSubs) == 0 {
-				_ = s.c.Bindings().UnsubscribeToFlowEvent()
+			e.flowSubs = append(e.flowSubs[:i], e.flowSubs[i+1:]...)
+			if len(e.flowSubs) == 0 {
+				_ = e.session.Bindings().UnsubscribeToFlowEvent()
 			}
 			return
 		}
 	}
 }
 
-func (s *EventsData) sendFlowEvent(ch chan core.FlowEventMessage, msg core.FlowEventMessage) {
+func (e *EventsData) sendFlowEvent(ch chan core.FlowEventMessage, msg core.FlowEventMessage) {
 	defer func() { _ = recover() }()
 	select {
 	case ch <- msg:
-	case <-s.c.Context().Done():
+	case <-e.session.Context().Done():
 	}
 }
 
@@ -305,21 +305,21 @@ func DefineFields[T any](fields ...Field) (*Definition[T], error) {
 	return &Definition[T]{core: dc}, nil
 }
 
-func RequestDataOnce[T any](ctx context.Context, s *EventsData, def *Definition[T], object core.ObjectID) (T, error) {
+func RequestDataOnce[T any](ctx context.Context, e *EventsData, def *Definition[T], object core.ObjectID) (T, error) {
 	var zero T
 	if def == nil {
 		return zero, fmt.Errorf("%w: nil definition", core.ErrDecode)
 	}
-	defineID, err := s.ensureDefinition(def.core)
+	defineID, err := e.ensureDefinition(def.core)
 	if err != nil {
 		return zero, err
 	}
-	requestID := s.c.NextRequestID()
-	waiter, err := s.c.AddWaiter(requestID)
+	requestID := e.session.NextRequestID()
+	waiter, err := e.session.AddWaiter(requestID)
 	if err != nil {
 		return zero, err
 	}
-	err = s.c.Bindings().RequestDataOnSimObject(
+	err = e.session.Bindings().RequestDataOnSimObject(
 		bindings.SIMCONNECT_DATA_REQUEST_ID(requestID),
 		bindings.SIMCONNECT_DATA_DEFINITION_ID(defineID),
 		bindings.SIMCONNECT_OBJECT_ID(object),
@@ -328,16 +328,16 @@ func RequestDataOnce[T any](ctx context.Context, s *EventsData, def *Definition[
 		0, 0, 0,
 	)
 	if err != nil {
-		s.c.RemoveWaiter(requestID)
+		e.session.RemoveWaiter(requestID)
 		return zero, err
 	}
-	s.c.TrackSend(requestID)
+	e.session.TrackSend(requestID)
 
 	var result core.RequestResult
 	select {
 	case result = <-waiter:
 	case <-ctx.Done():
-		s.c.RemoveWaiter(requestID)
+		e.session.RemoveWaiter(requestID)
 		return zero, ctx.Err()
 	}
 	if result.Err != nil {
@@ -350,37 +350,37 @@ func RequestDataOnce[T any](ctx context.Context, s *EventsData, def *Definition[
 	return decodeData[T](def.core, data.Payload)
 }
 
-func RequestDataByTypeOnce[T any](ctx context.Context, s *EventsData, def *Definition[T], radiusMeters uint32, objType core.SimObjectType) (DataUpdate[T], error) {
+func RequestDataByTypeOnce[T any](ctx context.Context, e *EventsData, def *Definition[T], radiusMeters uint32, objType core.SimObjectType) (DataUpdate[T], error) {
 	var zero DataUpdate[T]
 	if def == nil {
 		return zero, fmt.Errorf("%w: nil definition", core.ErrDecode)
 	}
-	defineID, err := s.ensureDefinition(def.core)
+	defineID, err := e.ensureDefinition(def.core)
 	if err != nil {
 		return zero, err
 	}
-	requestID := s.c.NextRequestID()
-	waiter, err := s.c.AddWaiter(requestID)
+	requestID := e.session.NextRequestID()
+	waiter, err := e.session.AddWaiter(requestID)
 	if err != nil {
 		return zero, err
 	}
-	err = s.c.Bindings().RequestDataOnSimObjectType(
+	err = e.session.Bindings().RequestDataOnSimObjectType(
 		bindings.SIMCONNECT_DATA_REQUEST_ID(requestID),
 		bindings.SIMCONNECT_DATA_DEFINITION_ID(defineID),
 		radiusMeters,
 		bindings.SIMCONNECT_SIMOBJECT_TYPE(objType),
 	)
 	if err != nil {
-		s.c.RemoveWaiter(requestID)
+		e.session.RemoveWaiter(requestID)
 		return zero, err
 	}
-	s.c.TrackSend(requestID)
+	e.session.TrackSend(requestID)
 
 	var result core.RequestResult
 	select {
 	case result = <-waiter:
 	case <-ctx.Done():
-		s.c.RemoveWaiter(requestID)
+		e.session.RemoveWaiter(requestID)
 		return zero, ctx.Err()
 	}
 	if result.Err != nil {
@@ -397,11 +397,11 @@ func RequestDataByTypeOnce[T any](ctx context.Context, s *EventsData, def *Defin
 	return DataUpdate[T]{ObjectID: core.ObjectID(data.ObjectID), Value: value}, nil
 }
 
-func SetDataOnSimObject[T any](s *EventsData, def *Definition[T], object core.ObjectID, value T, flags core.DataSetFlag) error {
+func SetDataOnSimObject[T any](e *EventsData, def *Definition[T], object core.ObjectID, value T, flags core.DataSetFlag) error {
 	if def == nil {
 		return fmt.Errorf("%w: nil definition", core.ErrDecode)
 	}
-	defineID, err := s.ensureDefinition(def.core)
+	defineID, err := e.ensureDefinition(def.core)
 	if err != nil {
 		return err
 	}
@@ -413,7 +413,7 @@ func SetDataOnSimObject[T any](s *EventsData, def *Definition[T], object core.Ob
 	if len(payload) > 0 {
 		pData = &payload[0]
 	}
-	return s.c.Bindings().SetDataOnSimObject(
+	return e.session.Bindings().SetDataOnSimObject(
 		bindings.SIMCONNECT_DATA_DEFINITION_ID(defineID),
 		bindings.SIMCONNECT_OBJECT_ID(object),
 		bindings.SIMCONNECT_DATA_SET_FLAG(flags),
@@ -423,11 +423,11 @@ func SetDataOnSimObject[T any](s *EventsData, def *Definition[T], object core.Ob
 	)
 }
 
-func SubscribeData[T any](ctx context.Context, s *EventsData, def *Definition[T], object core.ObjectID, period core.Period, opts ...DataOption) (<-chan DataUpdate[T], error) {
+func SubscribeData[T any](ctx context.Context, e *EventsData, def *Definition[T], object core.ObjectID, period core.Period, opts ...DataOption) (<-chan DataUpdate[T], error) {
 	if def == nil {
 		return nil, fmt.Errorf("%w: nil definition", core.ErrDecode)
 	}
-	defineID, err := s.ensureDefinition(def.core)
+	defineID, err := e.ensureDefinition(def.core)
 	if err != nil {
 		return nil, err
 	}
@@ -435,8 +435,8 @@ func SubscribeData[T any](ctx context.Context, s *EventsData, def *Definition[T]
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	requestID := s.c.NextRequestID()
-	ch := make(chan DataUpdate[T], s.c.ChannelBuffer())
+	requestID := e.session.NextRequestID()
+	ch := make(chan DataUpdate[T], e.session.ChannelBuffer())
 	handler := func(msg core.Message) {
 		data, ok := msg.(core.SimObjectDataMessage)
 		if !ok {
@@ -444,16 +444,16 @@ func SubscribeData[T any](ctx context.Context, s *EventsData, def *Definition[T]
 		}
 		value, err := decodeData[T](def.core, data.Payload)
 		if err != nil {
-			s.c.ReportError(err)
+			e.session.ReportError(err)
 			return
 		}
-		sendDataUpdate(ctx, s.c.Context(), ch, DataUpdate[T]{ObjectID: core.ObjectID(data.ObjectID), Value: value})
+		sendDataUpdate(ctx, e.session.Context(), ch, DataUpdate[T]{ObjectID: core.ObjectID(data.ObjectID), Value: value})
 	}
-	if err := s.c.AddDataSub(requestID, handler); err != nil {
+	if err := e.session.AddDataSub(requestID, handler); err != nil {
 		close(ch)
 		return nil, err
 	}
-	err = s.c.Bindings().RequestDataOnSimObject(
+	err = e.session.Bindings().RequestDataOnSimObject(
 		bindings.SIMCONNECT_DATA_REQUEST_ID(requestID),
 		bindings.SIMCONNECT_DATA_DEFINITION_ID(defineID),
 		bindings.SIMCONNECT_OBJECT_ID(object),
@@ -464,14 +464,14 @@ func SubscribeData[T any](ctx context.Context, s *EventsData, def *Definition[T]
 		cfg.limit,
 	)
 	if err != nil {
-		s.c.RemoveDataSub(requestID)
+		e.session.RemoveDataSub(requestID)
 		return nil, err
 	}
-	s.c.TrackSend(requestID)
+	e.session.TrackSend(requestID)
 
 	go func() {
 		<-ctx.Done()
-		_ = s.c.Bindings().RequestDataOnSimObject(
+		_ = e.session.Bindings().RequestDataOnSimObject(
 			bindings.SIMCONNECT_DATA_REQUEST_ID(requestID),
 			bindings.SIMCONNECT_DATA_DEFINITION_ID(defineID),
 			bindings.SIMCONNECT_OBJECT_ID(object),
@@ -479,7 +479,7 @@ func SubscribeData[T any](ctx context.Context, s *EventsData, def *Definition[T]
 			bindings.SIMCONNECT_DATA_REQUEST_FLAG(core.DataRequestDefault),
 			0, 0, 0,
 		)
-		s.c.RemoveDataSub(requestID)
+		e.session.RemoveDataSub(requestID)
 		close(ch)
 	}()
 	return ch, nil
@@ -487,39 +487,39 @@ func SubscribeData[T any](ctx context.Context, s *EventsData, def *Definition[T]
 
 // ─── Client data areas ────────────────────────────────────────────────────────
 
-func (s *EventsData) MapClientDataNameToID(name string, id core.ClientDataID) error {
-	return s.c.Bindings().MapClientDataNameToID(name, bindings.SIMCONNECT_CLIENT_DATA_ID(id))
+func (e *EventsData) MapClientDataNameToID(name string, id core.ClientDataID) error {
+	return e.session.Bindings().MapClientDataNameToID(name, bindings.SIMCONNECT_CLIENT_DATA_ID(id))
 }
 
-func (s *EventsData) CreateClientData(id core.ClientDataID, size uint32, flags core.ClientDataCreateFlag) error {
-	return s.c.Bindings().CreateClientData(bindings.SIMCONNECT_CLIENT_DATA_ID(id), size, bindings.SIMCONNECT_CREATE_CLIENT_DATA_FLAG(flags))
+func (e *EventsData) CreateClientData(id core.ClientDataID, size uint32, flags core.ClientDataCreateFlag) error {
+	return e.session.Bindings().CreateClientData(bindings.SIMCONNECT_CLIENT_DATA_ID(id), size, bindings.SIMCONNECT_CREATE_CLIENT_DATA_FLAG(flags))
 }
 
-func (s *EventsData) NewClientDataDefinition(items ...ClientDataDefinitionItem) (ClientDataDefinition, error) {
-	defineID := core.ClientDataDefinitionID(s.c.NextDefinitionID())
+func (e *EventsData) NewClientDataDefinition(items ...ClientDataDefinitionItem) (ClientDataDefinition, error) {
+	defineID := core.ClientDataDefinitionID(e.session.NextDefinitionID())
 	for _, item := range items {
-		if err := s.c.Bindings().AddToClientDataDefinition(bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(defineID), item.Offset, item.SizeOrType, item.Epsilon, item.DatumID); err != nil {
+		if err := e.session.Bindings().AddToClientDataDefinition(bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(defineID), item.Offset, item.SizeOrType, item.Epsilon, item.DatumID); err != nil {
 			return ClientDataDefinition{}, err
 		}
 	}
 	return ClientDataDefinition{id: defineID}, nil
 }
 
-func (s *EventsData) AddToClientDataDefinition(def ClientDataDefinition, item ClientDataDefinitionItem) error {
-	return s.c.Bindings().AddToClientDataDefinition(bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(def.id), item.Offset, item.SizeOrType, item.Epsilon, item.DatumID)
+func (e *EventsData) AddToClientDataDefinition(def ClientDataDefinition, item ClientDataDefinitionItem) error {
+	return e.session.Bindings().AddToClientDataDefinition(bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(def.id), item.Offset, item.SizeOrType, item.Epsilon, item.DatumID)
 }
 
-func (s *EventsData) ClearClientDataDefinition(def ClientDataDefinition) error {
-	return s.c.Bindings().ClearClientDataDefinition(bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(def.id))
+func (e *EventsData) ClearClientDataDefinition(def ClientDataDefinition) error {
+	return e.session.Bindings().ClearClientDataDefinition(bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(def.id))
 }
 
-func (s *EventsData) RequestClientData(ctx context.Context, clientDataID core.ClientDataID, def ClientDataDefinition, period core.ClientDataPeriod, flags core.ClientDataRequestFlag, origin, interval, limit uint32) (core.ClientDataMessage, error) {
-	requestID := s.c.NextRequestID()
-	waiter, err := s.c.AddWaiter(requestID)
+func (e *EventsData) RequestClientData(ctx context.Context, clientDataID core.ClientDataID, def ClientDataDefinition, period core.ClientDataPeriod, flags core.ClientDataRequestFlag, origin, interval, limit uint32) (core.ClientDataMessage, error) {
+	requestID := e.session.NextRequestID()
+	waiter, err := e.session.AddWaiter(requestID)
 	if err != nil {
 		return core.ClientDataMessage{}, err
 	}
-	err = s.c.Bindings().RequestClientData(
+	err = e.session.Bindings().RequestClientData(
 		bindings.SIMCONNECT_CLIENT_DATA_ID(clientDataID),
 		bindings.SIMCONNECT_DATA_REQUEST_ID(requestID),
 		bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(def.id),
@@ -528,16 +528,16 @@ func (s *EventsData) RequestClientData(ctx context.Context, clientDataID core.Cl
 		origin, interval, limit,
 	)
 	if err != nil {
-		s.c.RemoveWaiter(requestID)
+		e.session.RemoveWaiter(requestID)
 		return core.ClientDataMessage{}, err
 	}
-	s.c.TrackSend(requestID)
+	e.session.TrackSend(requestID)
 
 	var result core.RequestResult
 	select {
 	case result = <-waiter:
 	case <-ctx.Done():
-		s.c.RemoveWaiter(requestID)
+		e.session.RemoveWaiter(requestID)
 		return core.ClientDataMessage{}, ctx.Err()
 	}
 	if result.Err != nil {
@@ -550,12 +550,12 @@ func (s *EventsData) RequestClientData(ctx context.Context, clientDataID core.Cl
 	return data, nil
 }
 
-func (s *EventsData) SetClientData(clientDataID core.ClientDataID, def ClientDataDefinition, flags core.ClientDataSetFlag, data []byte) error {
+func (e *EventsData) SetClientData(clientDataID core.ClientDataID, def ClientDataDefinition, flags core.ClientDataSetFlag, data []byte) error {
 	var pData *byte
 	if len(data) > 0 {
 		pData = &data[0]
 	}
-	return s.c.Bindings().SetClientData(
+	return e.session.Bindings().SetClientData(
 		bindings.SIMCONNECT_CLIENT_DATA_ID(clientDataID),
 		bindings.SIMCONNECT_CLIENT_DATA_DEFINITION_ID(def.id),
 		bindings.SIMCONNECT_CLIENT_DATA_SET_FLAG(flags),
@@ -567,18 +567,18 @@ func (s *EventsData) SetClientData(clientDataID core.ClientDataID, def ClientDat
 
 // ─── Internal: definition management ─────────────────────────────────────────
 
-func (s *EventsData) ensureDefinition(dc *definitionCore) (uint32, error) {
+func (e *EventsData) ensureDefinition(dc *definitionCore) (uint32, error) {
 	if dc == nil {
 		return 0, fmt.Errorf("%w: nil definition", core.ErrDecode)
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if id, ok := s.definitions[dc]; ok {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if id, ok := e.definitions[dc]; ok {
 		return id, nil
 	}
-	defineID := s.c.NextDefinitionID()
+	defineID := e.session.NextDefinitionID()
 	for _, field := range dc.fields {
-		if err := s.c.Bindings().AddToDataDefinition(
+		if err := e.session.Bindings().AddToDataDefinition(
 			bindings.SIMCONNECT_DATA_DEFINITION_ID(defineID),
 			field.Name, field.Units, bindings.SIMCONNECT_DATATYPE(field.Type), field.Epsilon,
 			core.Unused,
@@ -586,7 +586,7 @@ func (s *EventsData) ensureDefinition(dc *definitionCore) (uint32, error) {
 			return 0, err
 		}
 	}
-	s.definitions[dc] = defineID
+	e.definitions[dc] = defineID
 	return defineID, nil
 }
 
@@ -870,8 +870,6 @@ func sendDataUpdate[T any](ctx context.Context, clientCtx context.Context, ch ch
 }
 
 func fixedString(b []byte) string {
-	if n := bytes.IndexByte(b, 0); n >= 0 {
-		return string(b[:n])
-	}
-	return string(b)
+	before, _, _ := bytes.Cut(b, []byte{0})
+	return string(before)
 }

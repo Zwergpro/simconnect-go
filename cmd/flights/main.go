@@ -92,7 +92,7 @@ func checkFlightSave(ctx context.Context, flt *flight.Flight, saveDir string) st
 	title := "simconnect-go flight save checker"
 	description := "Saved by cmd/flights to verify SimConnect_FlightSave."
 
-	if err := flt.FlightSave(
+	if err := flt.Save(
 		base,
 		flight.WithTitle(title),
 		flight.WithDescription(description),
@@ -137,7 +137,7 @@ func checkFlightLoad(flt *flight.Flight, savedPath string, enabled bool) {
 		return
 	}
 
-	if err := flt.FlightLoad(savedPath); err != nil {
+	if err := flt.Load(savedPath); err != nil {
 		fmt.Printf("  load %q: %s\n", savedPath, formatError(err))
 		return
 	}
@@ -156,7 +156,7 @@ func checkFlightPlanLoad(flt *flight.Flight, currentPlanPath string, enabled boo
 		return
 	}
 
-	if err := flt.FlightPlanLoad(currentPlanPath); err != nil {
+	if err := flt.PlanLoad(currentPlanPath); err != nil {
 		fmt.Printf("  load plan %q: %s\n", currentPlanPath, formatError(err))
 		return
 	}

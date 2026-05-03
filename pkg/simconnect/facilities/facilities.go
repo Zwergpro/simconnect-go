@@ -12,7 +12,7 @@ import (
 	"github.com/Zwergpro/simconnect-go/pkg/simconnect/core"
 )
 
-// Session is the subset of client.Client methods used by this package.
+// Session is the subset of client.Sim methods used by this package.
 type Session interface {
 	NextRequestID() uint32
 	NextDefinitionID() uint32
@@ -28,15 +28,15 @@ type Session interface {
 
 // Facilities exposes facility listing and data request functions.
 type Facilities struct {
-	c Session
+	session Session
 }
 
-func New(c Session) *Facilities {
-	return &Facilities{c: c}
+func New(s Session) *Facilities {
+	return &Facilities{session: s}
 }
 
-func (s *Facilities) NearbyAirports(ctx context.Context) (core.AirportListMessage, error) {
-	return s.RequestNearbyAirports(ctx)
+func (f *Facilities) NearbyAirports(ctx context.Context) (core.AirportListMessage, error) {
+	return f.RequestNearbyAirports(ctx)
 }
 
 type FacilityDefinition struct {
@@ -50,8 +50,8 @@ type FacilityDataFilter struct {
 	Data []byte
 }
 
-func (s *Facilities) RequestNearbyAirports(ctx context.Context) (core.AirportListMessage, error) {
-	messages, err := s.RequestFacilitiesList(ctx, core.FacilityListTypeAirport)
+func (f *Facilities) RequestNearbyAirports(ctx context.Context) (core.AirportListMessage, error) {
+	messages, err := f.RequestFacilitiesList(ctx, core.FacilityListTypeAirport)
 	if err != nil {
 		return core.AirportListMessage{}, err
 	}
@@ -70,132 +70,132 @@ func (s *Facilities) RequestNearbyAirports(ctx context.Context) (core.AirportLis
 	return out, nil
 }
 
-func (s *Facilities) RequestFacilitiesList(ctx context.Context, listType core.FacilityListType) ([]core.Message, error) {
-	requestID := s.c.NextRequestID()
-	return s.collectList(ctx, requestID, func() error {
-		return s.c.Bindings().RequestFacilitiesList_EX1(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID))
+func (f *Facilities) RequestFacilitiesList(ctx context.Context, listType core.FacilityListType) ([]core.Message, error) {
+	requestID := f.session.NextRequestID()
+	return f.collectList(ctx, requestID, func() error {
+		return f.session.Bindings().RequestFacilitiesList_EX1(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID))
 	})
 }
 
-func (s *Facilities) RequestAllFacilities(ctx context.Context, listType core.FacilityListType) ([]core.Message, error) {
-	requestID := s.c.NextRequestID()
-	return s.collectList(ctx, requestID, func() error {
-		return s.c.Bindings().RequestAllFacilities(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID))
+func (f *Facilities) RequestAllFacilities(ctx context.Context, listType core.FacilityListType) ([]core.Message, error) {
+	requestID := f.session.NextRequestID()
+	return f.collectList(ctx, requestID, func() error {
+		return f.session.Bindings().RequestAllFacilities(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID))
 	})
 }
 
-func (s *Facilities) SubscribeFacilities(ctx context.Context, listType core.FacilityListType) (<-chan core.Message, error) {
-	requestID := s.c.NextRequestID()
-	ch, err := s.subscribeList(requestID)
+func (f *Facilities) SubscribeFacilities(ctx context.Context, listType core.FacilityListType) (<-chan core.Message, error) {
+	requestID := f.session.NextRequestID()
+	ch, err := f.subscribeList(requestID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.c.Bindings().SubscribeToFacilities(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID)); err != nil {
-		s.c.RemoveDataSub(requestID)
+	if err := f.session.Bindings().SubscribeToFacilities(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID)); err != nil {
+		f.session.RemoveDataSub(requestID)
 		close(ch)
 		return nil, err
 	}
 	go func() {
 		<-ctx.Done()
-		_ = s.c.Bindings().UnsubscribeToFacilities(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType))
-		s.c.RemoveDataSub(requestID)
+		_ = f.session.Bindings().UnsubscribeToFacilities(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType))
+		f.session.RemoveDataSub(requestID)
 		close(ch)
 	}()
 	return ch, nil
 }
 
-func (s *Facilities) SubscribeFacilitiesEX1(ctx context.Context, listType core.FacilityListType) (<-chan core.Message, <-chan core.Message, error) {
-	newRequestID := s.c.NextRequestID()
-	oldRequestID := s.c.NextRequestID()
-	newCh, err := s.subscribeList(newRequestID)
+func (f *Facilities) SubscribeFacilitiesEX1(ctx context.Context, listType core.FacilityListType) (<-chan core.Message, <-chan core.Message, error) {
+	newRequestID := f.session.NextRequestID()
+	oldRequestID := f.session.NextRequestID()
+	newCh, err := f.subscribeList(newRequestID)
 	if err != nil {
 		return nil, nil, err
 	}
-	oldCh, err := s.subscribeList(oldRequestID)
+	oldCh, err := f.subscribeList(oldRequestID)
 	if err != nil {
-		s.c.RemoveDataSub(newRequestID)
+		f.session.RemoveDataSub(newRequestID)
 		close(newCh)
 		return nil, nil, err
 	}
-	if err := s.c.Bindings().SubscribeToFacilities_EX1(
+	if err := f.session.Bindings().SubscribeToFacilities_EX1(
 		bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType),
 		bindings.SIMCONNECT_DATA_REQUEST_ID(newRequestID),
 		bindings.SIMCONNECT_DATA_REQUEST_ID(oldRequestID),
 	); err != nil {
-		s.c.RemoveDataSub(newRequestID)
-		s.c.RemoveDataSub(oldRequestID)
+		f.session.RemoveDataSub(newRequestID)
+		f.session.RemoveDataSub(oldRequestID)
 		close(newCh)
 		close(oldCh)
 		return nil, nil, err
 	}
 	go func() {
 		<-ctx.Done()
-		_ = s.c.Bindings().UnsubscribeToFacilities_EX1(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), true, true)
-		s.c.RemoveDataSub(newRequestID)
-		s.c.RemoveDataSub(oldRequestID)
+		_ = f.session.Bindings().UnsubscribeToFacilities_EX1(bindings.SIMCONNECT_FACILITY_LIST_TYPE(listType), true, true)
+		f.session.RemoveDataSub(newRequestID)
+		f.session.RemoveDataSub(oldRequestID)
 		close(newCh)
 		close(oldCh)
 	}()
 	return newCh, oldCh, nil
 }
 
-func (s *Facilities) NewFacilityDefinition(fields ...string) (FacilityDefinition, error) {
-	def := FacilityDefinition{id: core.DataDefinitionID(s.c.NextDefinitionID())}
+func (f *Facilities) NewFacilityDefinition(fields ...string) (FacilityDefinition, error) {
+	def := FacilityDefinition{id: core.DataDefinitionID(f.session.NextDefinitionID())}
 	for _, field := range fields {
-		if err := s.AddToFacilityDefinition(def, field); err != nil {
+		if err := f.AddToFacilityDefinition(def, field); err != nil {
 			return FacilityDefinition{}, err
 		}
 	}
 	return def, nil
 }
 
-func (s *Facilities) AddToFacilityDefinition(def FacilityDefinition, field string) error {
-	return s.c.Bindings().AddToFacilityDefinition(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), field)
+func (f *Facilities) AddToFacilityDefinition(def FacilityDefinition, field string) error {
+	return f.session.Bindings().AddToFacilityDefinition(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), field)
 }
 
-func (s *Facilities) AddFacilityDataDefinitionFilter(def FacilityDefinition, filter FacilityDataFilter) error {
+func (f *Facilities) AddFacilityDataDefinitionFilter(def FacilityDefinition, filter FacilityDataFilter) error {
 	var pData *byte
 	if len(filter.Data) > 0 {
 		pData = &filter.Data[0]
 	}
-	return s.c.Bindings().AddFacilityDataDefinitionFilter(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), filter.Path, uint32(len(filter.Data)), unsafe.Pointer(pData))
+	return f.session.Bindings().AddFacilityDataDefinitionFilter(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), filter.Path, uint32(len(filter.Data)), unsafe.Pointer(pData))
 }
 
-func (s *Facilities) ClearAllFacilityDataDefinitionFilters(def FacilityDefinition) error {
-	return s.c.Bindings().ClearAllFacilityDataDefinitionFilters(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id))
+func (f *Facilities) ClearAllFacilityDataDefinitionFilters(def FacilityDefinition) error {
+	return f.session.Bindings().ClearAllFacilityDataDefinitionFilters(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id))
 }
 
-func (s *Facilities) RequestFacilityData(ctx context.Context, def FacilityDefinition, icao, region string) ([]core.FacilityDataMessage, error) {
-	requestID := s.c.NextRequestID()
-	return s.collectFacilityData(ctx, requestID, func() error {
-		return s.c.Bindings().RequestFacilityData(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID), icao, region)
+func (f *Facilities) RequestFacilityData(ctx context.Context, def FacilityDefinition, icao, region string) ([]core.FacilityDataMessage, error) {
+	requestID := f.session.NextRequestID()
+	return f.collectFacilityData(ctx, requestID, func() error {
+		return f.session.Bindings().RequestFacilityData(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID), icao, region)
 	})
 }
 
-func (s *Facilities) RequestFacilityDataEX1(ctx context.Context, def FacilityDefinition, icao, region string, facilityType byte) ([]core.FacilityDataMessage, error) {
-	requestID := s.c.NextRequestID()
-	return s.collectFacilityData(ctx, requestID, func() error {
-		return s.c.Bindings().RequestFacilityData_EX1(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID), icao, region, facilityType)
+func (f *Facilities) RequestFacilityDataEX1(ctx context.Context, def FacilityDefinition, icao, region string, facilityType byte) ([]core.FacilityDataMessage, error) {
+	requestID := f.session.NextRequestID()
+	return f.collectFacilityData(ctx, requestID, func() error {
+		return f.session.Bindings().RequestFacilityData_EX1(bindings.SIMCONNECT_DATA_DEFINITION_ID(def.id), bindings.SIMCONNECT_DATA_REQUEST_ID(requestID), icao, region, facilityType)
 	})
 }
 
-func (s *Facilities) RequestJetwayData(ctx context.Context, airportICAO string, indexes []int32) (core.JetwayDataMessage, error) {
+func (f *Facilities) RequestJetwayData(ctx context.Context, airportICAO string, indexes []int32) (core.JetwayDataMessage, error) {
 	ch := make(chan core.JetwayDataMessage, 1)
 	const jetwayRequestID uint32 = 0
-	if err := s.c.AddDataSub(jetwayRequestID, func(msg core.Message) {
+	if err := f.session.AddDataSub(jetwayRequestID, func(msg core.Message) {
 		m, ok := msg.(core.JetwayDataMessage)
 		if !ok {
 			return
 		}
 		select {
 		case ch <- m:
-		case <-s.c.Context().Done():
+		case <-f.session.Context().Done():
 		}
 	}); err != nil {
 		return core.JetwayDataMessage{}, err
 	}
-	defer s.c.RemoveDataSub(jetwayRequestID)
-	if err := s.c.Bindings().RequestJetwayData(airportICAO, indexes); err != nil {
+	defer f.session.RemoveDataSub(jetwayRequestID)
+	if err := f.session.Bindings().RequestJetwayData(airportICAO, indexes); err != nil {
 		return core.JetwayDataMessage{}, err
 	}
 	select {
@@ -206,8 +206,8 @@ func (s *Facilities) RequestJetwayData(ctx context.Context, airportICAO string, 
 	}
 }
 
-func (s *Facilities) collectList(ctx context.Context, requestID uint32, call func() error) ([]core.Message, error) {
-	waiter, err := s.c.AddWaiter(requestID)
+func (f *Facilities) collectList(ctx context.Context, requestID uint32, call func() error) ([]core.Message, error) {
+	waiter, err := f.session.AddWaiter(requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -218,19 +218,19 @@ func (s *Facilities) collectList(ctx context.Context, requestID uint32, call fun
 		}
 		select {
 		case packets <- msg:
-		case <-s.c.Context().Done():
+		case <-f.session.Context().Done():
 		}
 	}
-	if err := s.c.AddDataSub(requestID, handler); err != nil {
-		s.c.RemoveWaiter(requestID)
+	if err := f.session.AddDataSub(requestID, handler); err != nil {
+		f.session.RemoveWaiter(requestID)
 		return nil, err
 	}
-	defer s.c.RemoveDataSub(requestID)
+	defer f.session.RemoveDataSub(requestID)
 	if err := call(); err != nil {
-		s.c.RemoveWaiter(requestID)
+		f.session.RemoveWaiter(requestID)
 		return nil, err
 	}
-	s.c.TrackSend(requestID)
+	f.session.TrackSend(requestID)
 
 	var out []core.Message
 	for {
@@ -246,14 +246,14 @@ func (s *Facilities) collectList(ctx context.Context, requestID uint32, call fun
 				return out, nil
 			}
 		case <-ctx.Done():
-			s.c.RemoveWaiter(requestID)
+			f.session.RemoveWaiter(requestID)
 			return nil, ctx.Err()
 		}
 	}
 }
 
-func (s *Facilities) collectFacilityData(ctx context.Context, requestID uint32, call func() error) ([]core.FacilityDataMessage, error) {
-	waiter, err := s.c.AddWaiter(requestID)
+func (f *Facilities) collectFacilityData(ctx context.Context, requestID uint32, call func() error) ([]core.FacilityDataMessage, error) {
+	waiter, err := f.session.AddWaiter(requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -273,19 +273,19 @@ func (s *Facilities) collectFacilityData(ctx context.Context, requestID uint32, 
 		}
 		select {
 		case packets <- msg:
-		case <-s.c.Context().Done():
+		case <-f.session.Context().Done():
 		}
 	}
-	if err := s.c.AddDataSub(requestID, handler); err != nil {
-		s.c.RemoveWaiter(requestID)
+	if err := f.session.AddDataSub(requestID, handler); err != nil {
+		f.session.RemoveWaiter(requestID)
 		return nil, err
 	}
-	defer s.c.RemoveDataSub(requestID)
+	defer f.session.RemoveDataSub(requestID)
 	if err := call(); err != nil {
-		s.c.RemoveWaiter(requestID)
+		f.session.RemoveWaiter(requestID)
 		return nil, err
 	}
-	s.c.TrackSend(requestID)
+	f.session.TrackSend(requestID)
 
 	var out []core.FacilityDataMessage
 	for {
@@ -303,24 +303,24 @@ func (s *Facilities) collectFacilityData(ctx context.Context, requestID uint32, 
 				return out, nil
 			}
 		case <-ctx.Done():
-			s.c.RemoveWaiter(requestID)
+			f.session.RemoveWaiter(requestID)
 			return nil, ctx.Err()
 		}
 	}
 }
 
-func (s *Facilities) subscribeList(requestID uint32) (chan core.Message, error) {
-	ch := make(chan core.Message, s.c.ChannelBuffer())
+func (f *Facilities) subscribeList(requestID uint32) (chan core.Message, error) {
+	ch := make(chan core.Message, f.session.ChannelBuffer())
 	handler := func(msg core.Message) {
 		if !isListMessageForRequest(msg, requestID) {
 			return
 		}
 		select {
 		case ch <- msg:
-		case <-s.c.Context().Done():
+		case <-f.session.Context().Done():
 		}
 	}
-	if err := s.c.AddDataSub(requestID, handler); err != nil {
+	if err := f.session.AddDataSub(requestID, handler); err != nil {
 		close(ch)
 		return nil, err
 	}
