@@ -41,7 +41,7 @@ func hresultErr(r uintptr) error {
 // ---- DLL and procedure handles ----
 
 var (
-	dll = syscall.NewLazyDLL("sdk/SimConnect.dll")
+	dll = &syscall.LazyDLL{} // Name set by LoadDLL() before first proc.Call.
 
 	procOpen                                       = dll.NewProc("SimConnect_Open")
 	procClose                                      = dll.NewProc("SimConnect_Close")

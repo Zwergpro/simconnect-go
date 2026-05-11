@@ -8,11 +8,11 @@ Module path: `github.com/Zwergpro/simconnect-go`.
 
 ## 1. What is SimConnect?
 
-SimConnect is the official client API that Microsoft Flight Simulator (2020 / 2024) ships for third-party applications: cockpit panels, ATC tools, hardware bridges, telemetry dashboards, mission/scenario scripts, multi-monitor camera rigs. The SDK ships in `sdk/` as three artifacts:
+SimConnect is the official client API that Microsoft Flight Simulator (2020 / 2024) ships for third-party applications: cockpit panels, ATC tools, hardware bridges, telemetry dashboards, mission/scenario scripts, multi-monitor camera rigs. The SDK artifacts in this repo:
 
-- `sdk/SimConnect.h` — C/C++ header (~1700 lines, MSFS 2024 schema)
-- `sdk/SimConnect.dll` — runtime library that talks to the simulator
+- `sdk/SimConnect.h` — C/C++ header (~1700 lines, MSFS 2024 schema), kept as reference material
 - `sdk/SimConnect.lib` — static import library (unused by this project; we load the DLL dynamically)
+- `pkg/bindings/SimConnect.dll` — runtime library that talks to the simulator; embedded into the binary via `//go:embed` and extracted at runtime
 
 **Connection model.** A client process loads `SimConnect.dll`, calls `SimConnect_Open`, and is given an opaque `HANDLE`. Behind the scenes the DLL connects to the running simulator over a named pipe (local) or TCP (remote). The simulator is the server; multiple clients can attach simultaneously.
 
@@ -64,7 +64,7 @@ The official documentation under [sdk/apidocs/](../sdk/apidocs/) groups the ~120
 
 ## 3. Layer 1 — `pkg/bindings` (raw syscall wrapper)
 
-The bindings package is a thin, hand-maintained, **CGo-free** shim over `SimConnect.dll`. The DLL is loaded with `syscall.NewLazyDLL("SimConnect.dll")` and every entry point is invoked via `proc.Call(...)`. There is no C compiler dependency; the DLL is resolved at runtime — drop `SimConnect.dll` next to the binary and it will work on any Windows host.
+The bindings package is a thin, hand-maintained, **CGo-free** shim over `SimConnect.dll`. The DLL ships embedded in the package (`//go:embed SimConnect.dll` in [pkg/bindings/dll_embed.go](../pkg/bindings/dll_embed.go)) and is extracted to `%TEMP%\simconnect-go-<sha256_16>.dll` on first use; `syscall.NewLazyDLL` loads from that path and every entry point is invoked via `proc.Call(...)`. There is no C compiler dependency. Callers can override the DLL path with `client.WithDLLPath(path)` / `bindings.SetDLLPath(path)` or the `SIMCONNECT_DLL` env var — paths that don't exist transparently fall back to the embedded copy.
 
 Every file in `pkg/bindings/` carries `//go:build windows`.
 
@@ -356,7 +356,7 @@ To build an example:
 GOOS=windows GOARCH=amd64 go build -o monitor.exe ./cmd/monitor
 ```
 
-To run, the binary needs `SimConnect.dll` discoverable at startup — easiest is to copy `sdk/SimConnect.dll` next to the executable. Runtime exercise also needs MSFS 2024 actually running and accepting connections.
+The resulting binary is self-contained: `SimConnect.dll` is embedded and extracted to `%TEMP%\simconnect-go-<hash>.dll` on first use. Override with `client.WithDLLPath(...)` or `SIMCONNECT_DLL=<path>` to point at a different DLL; missing override paths fall back to the embedded copy. Runtime exercise also needs MSFS 2024 actually running and accepting connections.
 
 There are no Go tests against the simulator; `pkg/bindings/layout_test.go` covers struct layout in isolation and runs anywhere via `GOOS=windows GOARCH=amd64 go test ./pkg/bindings/...`.
 

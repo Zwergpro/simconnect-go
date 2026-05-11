@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 Go bindings for Microsoft Flight Simulator's **SimConnect SDK** (`SimConnect.dll`).
-The SDK is Windows-only and ships as a C++ header (`sdk/SimConnect.h`) plus DLL/import-lib (`sdk/SimConnect.dll`, `sdk/SimConnect.lib`).
+The SDK is Windows-only. Reference material lives in `sdk/` (C++ header `sdk/SimConnect.h`, import lib `sdk/SimConnect.lib`); the redistributable runtime DLL lives at `pkg/bindings/SimConnect.dll` and is embedded into compiled binaries via `//go:embed`.
 
 ## Build & Verify
 
@@ -23,7 +23,7 @@ Tests run on any host via cross-compile; they don't need MSFS:
 - `pkg/bindings/layout_test.go` — `unsafe.Sizeof` / `unsafe.Offsetof` assertions guarding C struct layout. Run this whenever you touch `structs.go` or `packed.go`.
 - `pkg/simconnect/client/{client,public_api}_test.go` — exercises the dispatch loop, ID allocators, and facet wiring.
 
-Runtime exercise (anything in `cmd/`) requires a Windows host with MSFS 2024 running, plus `SimConnect.dll` discoverable at startup — easiest is to copy `sdk/SimConnect.dll` next to the built `.exe`.
+Runtime exercise (anything in `cmd/`) requires a Windows host with MSFS 2024 running. The DLL is embedded in the binary; on first call it is extracted to `%TEMP%\simconnect-go-<sha256_16>.dll` and loaded from there. Override via `client.WithDLLPath(path)` / `bindings.SetDLLPath(path)` or `SIMCONNECT_DLL=<path>`; missing override paths fall back to the embedded copy with a stderr notice.
 
 For the full architectural tour with end-to-end traces, read [docs/OVERVIEW.md](docs/OVERVIEW.md). This file is the cliff-notes; OVERVIEW is the manual.
 
@@ -84,7 +84,10 @@ The raw bindings package is split by *kind of declaration*, not by SDK feature. 
 | `enums.go` | All `SIMCONNECT_ENUM` types as Go typed-`uint32` (or `int32`) constants, plus the `SIMCONNECT_USER_ENUM` and `SIMCONNECT_ENUM_FLAGS` typedefs (which are all `= uint32` aliases) |
 | `structs.go` | All `SIMCONNECT_RECV_*` and `SIMCONNECT_DATA_*` structs |
 | `packed.go` | `SIMCONNECT_PACKED_FLOAT64`/`UINT64` and `SIMCONNECT_PACKED_DATA_LATLONALT`/`XYZ` wrappers. Their `.Float64()` / `.SetFloat64()` accessors use `binary.LittleEndian` + `math.Float64frombits` so `#pragma pack(1)` fields are read safely on misaligned offsets — **always use these accessors** rather than peeking at the underlying byte array. |
-| `simconnect.go` | DLL handle, all `proc*` `*LazyProc` vars, the `SimConnect` session type, helpers, and every function wrapper |
+| `simconnect.go` | DLL handle (`*syscall.LazyDLL` placeholder), all `proc*` `*LazyProc` vars, the `SimConnect` session type, helpers, and every function wrapper |
+| `dll_embed.go` | `//go:embed SimConnect.dll` declaration — the embedded MSFS 2024 redistributable bytes |
+| `dll_loader.go` | `SetDLLPath`, `LoadDLL`, and embedded-DLL extraction to `%TEMP%`. `LoadDLL` is called from `client.Dial` before the first `proc.Call`. |
+| `SimConnect.dll` | The MSFS 2024 SimConnect redistributable, consumed by `//go:embed`. Replace when bumping SDK version. |
 | `layout_test.go` | `unsafe.Sizeof` / `unsafe.Offsetof` assertions. Run after any change in `structs.go` / `packed.go`. |
 
 ### Struct conventions (matters for layout, not just style)

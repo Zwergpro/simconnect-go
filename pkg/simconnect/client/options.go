@@ -5,6 +5,7 @@ package client
 import (
 	"time"
 
+	"github.com/Zwergpro/simconnect-go/pkg/bindings"
 	"github.com/Zwergpro/simconnect-go/pkg/simconnect/core"
 )
 
@@ -71,5 +72,15 @@ func WithEventHandle(eventHandle uintptr) Option {
 func WithConfigIndex(configIndex uint32) Option {
 	return func(cfg *clientConfig) {
 		cfg.configIndex = configIndex
+	}
+}
+
+// WithDLLPath overrides the SimConnect.dll location. If the file at path
+// exists, it is loaded instead of the embedded copy; otherwise the loader
+// falls back to the embedded DLL with a stderr notice. The setting is
+// process-global: the first Open call wins; later overrides are ignored.
+func WithDLLPath(path string) Option {
+	return func(*clientConfig) {
+		bindings.SetDLLPath(path)
 	}
 }

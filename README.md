@@ -10,7 +10,7 @@ import simconnect "github.com/Zwergpro/simconnect-go/pkg/simconnect/client"
 
 ## Features
 
-- **No CGo, no C toolchain.** `SimConnect.dll` is loaded at runtime via `syscall.NewLazyDLL` — drop the DLL next to your binary and it works on any Windows host.
+- **No CGo, no C toolchain.** `SimConnect.dll` is embedded into the binary and loaded at runtime via `syscall.NewLazyDLL` — `go build` produces a self-contained `.exe` that works on any Windows host. Override with `simconnect.WithDLLPath(...)` or the `SIMCONNECT_DLL` env var; missing override paths fall back to the embedded copy.
 - **Two layers, your choice.** Use the raw [`pkg/bindings`](pkg/bindings/) shim (one Go function per native API, names mirror the SDK verbatim) or the high-level [`pkg/simconnect`](pkg/simconnect/) client.
 - **Typed SimVar definitions.** Tag a Go struct with `sim:"NAME,units"` and `simvar.Define[T]()` reflects it into a SimConnect data definition.
 - **Context-cancellable session.** `simconnect.Open(ctx, ...)` runs a background dispatch goroutine; `Close` is idempotent and fans `ErrClosed` to outstanding waiters.
@@ -20,7 +20,7 @@ import simconnect "github.com/Zwergpro/simconnect-go/pkg/simconnect/client"
 ## Requirements
 
 - Windows host with **Microsoft Flight Simulator 2024** running for runtime exercise.
-- `SimConnect.dll` discoverable at startup — easiest is to copy `sdk/SimConnect.dll` next to your built `.exe`.
+- No separate DLL deployment needed — the MSFS 2024 SimConnect redistributable is embedded. Use `simconnect.WithDLLPath(path)` or `SIMCONNECT_DLL=path` to load a different DLL (newer SDK, system-managed install). If the override path doesn't exist, the loader falls back to the embedded copy and logs one notice.
 - Go 1.26+.
 
 The whole `pkg/` tree carries `//go:build windows`. Tests cross-compile and run on any host.
@@ -175,7 +175,7 @@ Build an example:
 GOOS=windows GOARCH=amd64 go build -o monitor.exe ./cmd/monitor
 ```
 
-To run, the binary needs `SimConnect.dll` discoverable at startup — easiest is to copy `sdk/SimConnect.dll` next to the executable. Runtime exercise also needs MSFS 2024 actually running.
+The resulting `.exe` is self-contained: `SimConnect.dll` is embedded and extracted to `%TEMP%\simconnect-go-<hash>.dll` on first use. To load a different DLL, pass `simconnect.WithDLLPath("C:\\path\\to\\SimConnect.dll")` to `Open` or set `SIMCONNECT_DLL` in the environment; missing paths fall back to the embedded copy. Runtime exercise also needs MSFS 2024 actually running.
 
 ## Gotchas
 

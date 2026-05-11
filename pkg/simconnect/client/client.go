@@ -51,6 +51,10 @@ func Dial(ctx context.Context, appName string, opts ...Option) (*Sim, error) {
 		opt(&cfg)
 	}
 
+	if err := bindings.LoadDLL(); err != nil {
+		return nil, err
+	}
+
 	raw, err := bindings.Open(appName, bindings.HWND(cfg.hwnd), cfg.eventID, bindings.HANDLE(cfg.eventHandle), cfg.configIndex)
 	if err != nil {
 		return nil, err
